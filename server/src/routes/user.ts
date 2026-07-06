@@ -8,7 +8,8 @@ import {
   deactivateUser,
   getCurrentUser,
   updateProfile,
-  uploadAvatar
+  uploadAvatar,
+  deleteUserPermanently
 } from '../controllers/user';
 import { authenticate, authorize } from '../middleware/auth';
 import { Role } from '@prisma/client';
@@ -31,5 +32,6 @@ router.post('/', authenticate, authorize(Role.SUPER_ADMIN), createUser);
 router.get('/:id', authenticate, getUserById);
 router.patch('/:id', authenticate, authorize(Role.SUPER_ADMIN), updateUser);
 router.delete('/:id', authenticate, authorize(Role.SUPER_ADMIN), deactivateUser);
+router.delete('/:id/permanent', authenticate, authorize(Role.SUPER_ADMIN), deleteUserPermanently);
 
 export default router;

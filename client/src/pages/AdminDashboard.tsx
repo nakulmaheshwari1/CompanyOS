@@ -7,7 +7,7 @@ import { Input } from '../components/ui/Input';
 import { Avatar } from '../components/ui/Avatar';
 import { classNames } from '../utils/format';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { ShieldCheck, UserPlus, Users, ClipboardCheck, PlaySquare, Trash2, Shield, Settings, Plus, FolderKanban, RefreshCw } from 'lucide-react';
+import { ShieldCheck, UserPlus, Users, ClipboardCheck, PlaySquare, Trash2, Shield, Settings, Plus, FolderKanban, RefreshCw, UserX, UserMinus } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 
 interface User {
@@ -55,6 +55,7 @@ export const AdminDashboard: React.FC = () => {
   const [userRole, setUserRole] = useState<'SUPER_ADMIN' | 'MANAGER' | 'HR' | 'EMPLOYEE'>('EMPLOYEE');
   const [userDept, setUserDept] = useState('');
   const [userFormError, setUserFormError] = useState('');
+  const [createdCredentials, setCreatedCredentials] = useState<{ name: string; email: string; pass: string } | null>(null);
 
   // New Dept Form State
   const [deptName, setDeptName] = useState('');
@@ -117,13 +118,15 @@ export const AdminDashboard: React.FC = () => {
         departmentId: userDept || undefined
       });
 
+      // Save credentials for the success view
+      setCreatedCredentials({ name: userName, email: userEmail, pass: userPassword });
+
       // Reset Form & reload
       setUserName('');
       setUserEmail('');
       setUserPassword('');
       setUserRole('EMPLOYEE');
       setUserDept('');
-      setIsUserModalOpen(false);
       loadData();
     } catch (err: any) {
       setUserFormError(err.response?.data?.message || 'Failed to create user.');
@@ -152,6 +155,16 @@ export const AdminDashboard: React.FC = () => {
     if (!confirm('Are you sure you want to deactivate this user?')) return;
     try {
       await api.delete(`/api/users/${userId}`);
+      loadData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handlePermanentDeleteUser = async (userId: string) => {
+    if (!confirm('WARNING: Are you sure you want to PERMANENTLY delete this user? All their comments, attendance, and message records will be deleted. This cannot be undone.')) return;
+    try {
+      await api.delete(`/api/users/${userId}/permanent`);
       loadData();
     } catch (err) {
       console.error(err);
@@ -312,16 +325,23 @@ export const AdminDashboard: React.FC = () => {
                         {u.isActive ? 'Active' : 'Deactivated'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right flex items-center justify-end gap-1.5">
                       {u.isActive && (
                         <button
                           onClick={() => handleDeactivateUser(u.id)}
-                          className="text-[#FF3D3D] hover:text-[#FF2222] p-1.5 hover:bg-[#3D1414]/30 rounded-lg transition-all"
+                          className="text-[#FFB300] hover:text-[#FFA000] p-1.5 hover:bg-[#FFB300]/10 rounded-lg transition-all"
                           title="Deactivate Account"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <UserX className="w-4 h-4" />
                         </button>
                       )}
+                      <button
+                        onClick={() => handlePermanentDeleteUser(u.id)}
+                        className="text-[#FF3D3D] hover:text-[#FF2222] p-1.5 hover:bg-[#3D1414]/30 rounded-lg transition-all"
+                        title="Delete User Permanently"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -358,50 +378,91 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* Create User Modal */}
-      <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title="Create User Account">
-        {userFormError && (
-          <div className="bg-[#3D1414] border border-[#FF3D3D]/20 text-[#FF3D3D] text-xs font-semibold px-4 py-3 rounded-lg mb-4">
-            {userFormError}
+      <Modal isOpen={isUserModalOpen} onClose={() => { setIsUserModalOpen(false); setCreatedCredentials(null); }} title="Create User Account">
+        {createdCredentials ? (
+          <div className="space-y-4 py-2 select-text">
+            <div className="bg-[#1B4332]/30 border border-[#00E676]/20 text-[#00E676] text-xs font-semibold px-4 py-3 rounded-lg flex items-center gap-2">
+              <span>Account successfully created! Copy these credentials to share with the new team member.</span>
+            </div>
+            
+            <div className="bg-[#161616] border border-[rgba(255,255,255,0.08)] rounded-lg p-4 space-y-3 font-mono text-xs text-white">
+              <div>
+                <span className="text-text-secondary block text-[10px] uppercase font-bold tracking-wider mb-0.5">Name</span>
+                <span className="font-semibold">{createdCredentials.name}</span>
+              </div>
+              <div>
+                <span className="text-text-secondary block text-[10px] uppercase font-bold tracking-wider mb-0.5">Email</span>
+                <span className="font-semibold">{createdCredentials.email}</span>
+              </div>
+              <div>
+                <span className="text-text-secondary block text-[10px] uppercase font-bold tracking-wider mb-0.5">Password</span>
+                <span className="font-semibold">{createdCredentials.pass}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-6">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `Welcome to CompanyOS!\nName: ${createdCredentials.name}\nEmail: ${createdCredentials.email}\nPassword: ${createdCredentials.pass}`
+                  );
+                  alert('Credentials copied to clipboard!');
+                }}
+              >
+                Copy to Clipboard
+              </Button>
+              <Button type="button" variant="primary" onClick={() => { setIsUserModalOpen(false); setCreatedCredentials(null); }}>
+                Done
+              </Button>
+            </div>
           </div>
+        ) : (
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            {userFormError && (
+              <div className="bg-[#3D1414] border border-[#FF3D3D]/20 text-[#FF3D3D] text-xs font-semibold px-4 py-3 rounded-lg mb-4">
+                {userFormError}
+              </div>
+            )}
+            <Input label="Display Name" placeholder="e.g. Jane Doe" value={userName} onChange={(e) => setUserName(e.target.value)} required />
+            <Input label="Email Address" type="email" placeholder="jane@company.com" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} required />
+            <Input label="Password" type="password" placeholder="••••••••" value={userPassword} onChange={(e) => setUserPassword(e.target.value)} required />
+            
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wider">Role</label>
+              <select
+                value={userRole}
+                onChange={(e) => setUserRole(e.target.value as any)}
+                className="w-full px-3.5 py-2.5 bg-[#1C1C1C] border border-[rgba(255,255,255,0.08)] rounded-lg text-white focus:outline-none focus:border-[#00E676] text-sm"
+              >
+                <option value="EMPLOYEE">Employee</option>
+                <option value="MANAGER">Manager</option>
+                <option value="HR">HR Partner</option>
+                <option value="SUPER_ADMIN">System Admin</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wider">Department Assignment</label>
+              <select
+                value={userDept}
+                onChange={(e) => setUserDept(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-[#1C1C1C] border border-[rgba(255,255,255,0.08)] rounded-lg text-white focus:outline-none focus:border-[#00E676] text-sm"
+              >
+                <option value="">No Department</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-6">
+              <Button type="button" variant="ghost" onClick={() => setIsUserModalOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="primary">Create User</Button>
+            </div>
+          </form>
         )}
-        <form onSubmit={handleCreateUser} className="space-y-4">
-          <Input label="Display Name" placeholder="e.g. Jane Doe" value={userName} onChange={(e) => setUserName(e.target.value)} required />
-          <Input label="Email Address" type="email" placeholder="jane@company.com" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} required />
-          <Input label="Password" type="password" placeholder="••••••••" value={userPassword} onChange={(e) => setUserPassword(e.target.value)} required />
-          
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wider">Role</label>
-            <select
-              value={userRole}
-              onChange={(e) => setUserRole(e.target.value as any)}
-              className="w-full px-3.5 py-2.5 bg-[#1C1C1C] border border-[rgba(255,255,255,0.08)] rounded-lg text-white focus:outline-none focus:border-[#00E676] text-sm"
-            >
-              <option value="EMPLOYEE">Employee</option>
-              <option value="MANAGER">Manager</option>
-              <option value="HR">HR Partner</option>
-              <option value="SUPER_ADMIN">System Admin</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wider">Department Assignment</label>
-            <select
-              value={userDept}
-              onChange={(e) => setUserDept(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-[#1C1C1C] border border-[rgba(255,255,255,0.08)] rounded-lg text-white focus:outline-none focus:border-[#00E676] text-sm"
-            >
-              <option value="">No Department</option>
-              {departments.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex gap-3 justify-end mt-6">
-            <Button type="button" variant="ghost" onClick={() => setIsUserModalOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="primary">Create User</Button>
-          </div>
-        </form>
       </Modal>
 
       {/* Create Department Modal */}

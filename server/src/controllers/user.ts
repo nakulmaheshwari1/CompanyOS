@@ -332,3 +332,68 @@ export async function uploadAvatar(req: AuthenticatedRequest, res: Response, nex
     return next(error);
   }
 }
+
+export async function deleteUserPermanently(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+
+    if (req.user?.id === id) {
+      return res.status(400).json({ message: 'You cannot delete your own account.' });
+    }
+
+    // Use a transaction to clean up relations
+    await prisma.$transaction(async (tx) => {
+      // 1. Nullify manager in departments
+      await tx.department.updateMany({
+        where: { managerId: id },
+        data: { managerId: null }
+      });
+
+      // 2. Delete attendance records
+      await tx.attendance.deleteMany({
+        where: { userId: id }
+      });
+
+      // 3. Delete task assignees
+      await tx.taskAssignee.deleteMany({
+        where: { userId: id }
+      });
+
+      // 4. Delete comments
+      await tx.comment.deleteMany({
+        where: { authorId: id }
+      });
+
+      // 5. Delete channel memberships
+      await tx.channelMember.deleteMany({
+        where: { userId: id }
+      });
+
+      // 6. Delete notifications
+      await tx.notification.deleteMany({
+        where: { userId: id }
+      });
+
+      // 7. Delete messages sent by user
+      await tx.message.deleteMany({
+        where: { senderId: id }
+      });
+
+      // 8. Handle tasks created by the user
+      // For tasks they created, we can re-assign creator to the super admin performing this action
+      await tx.task.updateMany({
+        where: { creatorId: id },
+        data: { creatorId: req.user!.id }
+      });
+
+      // 9. Delete the user
+      await tx.user.delete({
+        where: { id }
+      });
+    });
+
+    return res.status(200).json({ message: 'User permanently deleted.' });
+  } catch (error) {
+    return next(error);
+  }
+}
