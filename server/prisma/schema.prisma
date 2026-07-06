@@ -1,0 +1,191 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  passwordHash       String
+  role               Role      @default(EMPLOYEE)
+  departmentId       String?
+  department         Department? @relation("DepartmentUsers", fields: [departmentId], references: [id])
+  departmentsManaged Department[] @relation("DepartmentManager")
+  avatarUrl          String?
+  isActive           Boolean   @default(true)
+  lastActiveAt       DateTime?
+  createdAt          DateTime  @default(now())
+  attendance         Attendance[]
+  tasksCreated       Task[]    @relation("TaskCreator")
+  taskAssignees      TaskAssignee[]
+  comments           Comment[]
+  messagesSent       Message[]
+  notifications      Notification[]
+  channelMembers     ChannelMember[]
+}
+
+enum Role {
+  SUPER_ADMIN
+  MANAGER
+  HR
+  EMPLOYEE
+}
+
+model Department {
+  id        String  @id @default(cuid())
+  name      String
+  managerId String?
+  manager   User?   @relation("DepartmentManager", fields: [managerId], references: [id])
+  users     User[]  @relation("DepartmentUsers")
+}
+
+model Attendance {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  date         DateTime  @db.Date
+  clockIn      DateTime?
+  clockOut     DateTime?
+  status       AttendanceStatus @default(ABSENT)
+  notes        String?
+  hoursWorked  Float     @default(0.0)
+  clockInCount Int       @default(0)
+  @@unique([userId, date])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  HALF_DAY
+  ABSENT
+  ON_LEAVE
+}
+
+model Task {
+  id              String     @id @default(cuid())
+  title           String
+  description     String?
+  creatorId       String
+  creator         User       @relation("TaskCreator", fields: [creatorId], references: [id])
+  assignees       TaskAssignee[]
+  status          TaskStatus @default(NOT_STARTED)
+  priority        Priority   @default(MEDIUM)
+  startDate       DateTime?
+  dueDate         DateTime?
+  completedAt     DateTime?
+  estimatedHours  Float?
+  actualHours     Float?
+  tags            String[]
+  attachments     String[]
+  comments        Comment[]
+  parentTaskId    String?
+  subtasks        Task[]     @relation("SubTasks")
+  parentTask      Task?      @relation("SubTasks", fields: [parentTaskId], references: [id])
+  channel         Channel?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  ON_HOLD
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model TaskAssignee {
+  taskId  String
+  userId  String
+  task    Task   @relation(fields: [taskId], references: [id])
+  user    User   @relation(fields: [userId], references: [id])
+  @@id([taskId, userId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id])
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Channel {
+  id        String      @id @default(cuid())
+  type      ChannelType
+  name      String?
+  avatarUrl String?
+  createdBy String?
+  taskId    String?     @unique
+  task      Task?       @relation(fields: [taskId], references: [id])
+  members   ChannelMember[]
+  messages  Message[]
+  createdAt DateTime    @default(now())
+}
+
+enum ChannelType {
+  GLOBAL
+  DM
+  GROUP
+  TASK
+}
+
+model ChannelMember {
+  channelId    String
+  userId       String
+  channel      Channel  @relation(fields: [channelId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
+  lastReadAt   DateTime?
+  @@id([channelId, userId])
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  channelId       String
+  channel         Channel  @relation(fields: [channelId], references: [id])
+  senderId        String
+  sender          User     @relation(fields: [senderId], references: [id])
+  content         String
+  attachments     String[]
+  parentMessageId String?
+  parentMessage   Message? @relation("ThreadReplies", fields: [parentMessageId], references: [id])
+  replies         Message[] @relation("ThreadReplies")
+  createdAt       DateTime @default(now())
+  editedAt        DateTime?
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  user         User             @relation(fields: [userId], references: [id])
+  type        NotificationType
+  title       String
+  body        String
+  referenceId String?
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_OVERDUE
+  TASK_UPDATED
+  TASK_COMMENT
+  CHAT_MENTION
+  ATTENDANCE_ALERT
+  ANNOUNCEMENT
+}

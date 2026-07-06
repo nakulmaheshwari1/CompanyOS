@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Production builds
+dist/
+**/dist/
+
+# Local env files
+.env
+.env*.local
+**/.env
+**/.env*.local
